@@ -1,0 +1,26 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BacklogItem {
+  id          Int     @id @default(autoincrement())
+  description String
+  priority    String  // "High", "Medium", "Low"
+  effort      Int
+  status      String  @default("product_backlog") // product_backlog, sprint_locked, done
+  tasks       Task[]
+}
+
+model Task {
+  id            Int         @id @default(autoincrement())
+  description   String
+  status        String      @default("todo") // todo, done
+  backlogItemId Int
+  backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id])
+}
