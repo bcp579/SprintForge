@@ -8,19 +8,45 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// NEW: Dedicated Sprint Table
+model Sprint {
+  id          Int           @id @default(autoincrement())
+  name        String
+  capacity    Int           // To check against total effort
+  duration    Int           // in days or weeks
+  status      String        @default("planning") // planning, active, completed
+  items       BacklogItem[] // Links to the items in this sprint
+}
+
 model BacklogItem {
-  id          Int     @id @default(autoincrement())
-  description String
-  priority    String  // "High", "Medium", "Low"
-  effort      Int
-  status      String  @default("product_backlog") // product_backlog, sprint_locked, done
-  tasks       Task[]
+  id              Int      @id @default(autoincrement())
+  description     String
+  priority        String   // "High", "Medium", "Low"
+  originalEffort  Int      @default(0)  
+  remainingEffort Int      @default(0)  
+  risk            String?  
+  status          String   @default("product_backlog") 
+  
+  sprintId        Int?
+  sprint          Sprint?  @relation(fields: [sprintId], references: [id])
+  tasks           Task[]
 }
 
 model Task {
-  id            Int         @id @default(autoincrement())
-  description   String
-  status        String      @default("todo") // todo, done
-  backlogItemId Int
-  backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id])
+  id              Int         @id @default(autoincrement())
+  description     String
+  status          String      @default("todo") // todo, done
+  loggedHours     Int         @default(0)      // To track actual time spent
+  
+  // Relations
+  backlogItemId   Int
+  backlogItem     BacklogItem @relation(fields: [backlogItemId], references: [id])
+}
+
+// NEW: Tracking for the Burndown Chart
+model DailySprintLog {
+  id              Int      @id @default(autoincrement())
+  sprintId        Int
+  date            DateTime @default(now())
+  remainingEffort Int      // Snapshot of total remaining hours that day
 }

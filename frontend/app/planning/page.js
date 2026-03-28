@@ -1,201 +1,204 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, Lock } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Lock, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function SprintPlanning() {
   const router = useRouter();
   
-  // State for the two columns
+  // Lists
   const [backlog, setBacklog] = useState([]);
-  const [sprint, setSprint] = useState([]);
+  const [sprintItems, setSprintItems] = useState([]);
   
-  // Inputs
-  const [capacity, setCapacity] = useState(10);
+  // Sprint Setup Data
+  const [sprintName, setSprintName] = useState("");
+  const [sprintCapacity, setSprintCapacity] = useState(40); // Default 40 hours
+  const [sprintDuration, setSprintDuration] = useState(2); // Default 2 weeks
   const [loading, setLoading] = useState(true);
 
-  // 1. INITIAL LOAD: Get all Product Backlog items from DB
+  // DYNAMIC CALCULATIONS (Matches your 'Capacity Limit' test cases)
+  const totalEffort = sprintItems.reduce((acc, curr) => acc + curr.originalEffort, 0);
+  const isOverCapacity = totalEffort > sprintCapacity;
+
+  // 1. Fetch available Backlog Items on load
   useEffect(() => {
     async function fetchData() {
-      try {
-        const res = await fetch('/api/backlog'); // Fetches all items
-        const data = await res.json();
-        
-        // Only show items that are NOT already in a sprint or done
-        const availableItems = data.filter(item => item.status === 'product_backlog');
-        setBacklog(availableItems);
-        setLoading(false);
-      } catch (e) {
-        console.error("Failed to load backlog", e);
-      }
+      const res = await fetch('/api/backlog');
+      const data = await res.json();
+      // Only show items that are still in the product backlog
+      setBacklog(data.filter(item => item.status === 'product_backlog'));
+      setLoading(false);
     }
     fetchData();
   }, []);
 
-  // 2. AUTO-PROPOSE: Call the Algorithm API
-  const handleAutoPropose = async () => {
-    if (backlog.length === 0) return;
+  // 2. Auto-Propose Algorithm (Matches your 'generate_sprint_proposal' test case)
+  const handleAutoPropose = () => {
+    let currentLoad = 0;
+    const proposed = [];
+    const remaining = [];
 
-    // Call Backend
-    const response = await fetch('/api/planning', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ capacity: capacity })
+    // Sort by Priority (High -> Medium -> Low)
+    const priorityMap = { High: 3, Medium: 2, Low: 1 };
+    const sorted = [...backlog].sort((a, b) => priorityMap[b.priority] - priorityMap[a.priority]);
+
+    sorted.forEach(item => {
+      if (currentLoad + item.originalEffort <= sprintCapacity) {
+        proposed.push(item);
+        currentLoad += item.originalEffort;
+      } else {
+        remaining.push(item);
+      }
     });
-    
-    if (response.ok) {
-      const proposedItems = await response.json();
-      
-      // Update Right Column (Sprint Candidate)
-      setSprint(proposedItems);
-      
-      // Update Left Column (Remove proposed items from Backlog view)
-      const proposedIds = proposedItems.map(i => i.id);
-      setBacklog(prev => prev.filter(item => !proposedIds.includes(item.id)));
-    }
+
+    setSprintItems(proposed);
+    setBacklog(remaining);
   };
 
-  // 3. START SPRINT: Lock the items
+  // 3. Start & Lock Sprint
   const handleStartSprint = async () => {
-    if (sprint.length === 0) return;
+    if (isOverCapacity) return alert("Cannot start: Sprint capacity exceeded!");
+    if (!sprintName) return alert("Please enter a Sprint Name.");
+    if (sprintItems.length === 0) return alert("Sprint is empty.");
 
-    const idsToLock = sprint.map(item => item.id);
+    const itemIds = sprintItems.map(item => item.id);
 
+    // Call the API we just made in Step 1
     const response = await fetch('/api/sprint/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: idsToLock })
+      body: JSON.stringify({ 
+        name: sprintName, 
+        capacity: sprintCapacity, 
+        duration: sprintDuration,
+        itemIds: itemIds 
+      })
     });
 
     if (response.ok) {
-      // Redirect to the Active Workspace
-      router.push('/active');
+      router.push('/active'); // Redirect to Active Sprint board
     } else {
       alert("Failed to start sprint.");
     }
   };
 
-  // Manual Movement: Backlog -> Sprint
+  // Move items manually between lists
   const moveToSprint = (item) => {
-    setSprint([...sprint, item]);
+    setSprintItems([...sprintItems, item]);
     setBacklog(backlog.filter(i => i.id !== item.id));
   };
 
-  // Manual Movement: Sprint -> Backlog
   const moveToBacklog = (item) => {
     setBacklog([...backlog, item]);
-    setSprint(sprint.filter(i => i.id !== item.id));
+    setSprintItems(sprintItems.filter(i => i.id !== item.id));
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-500">Loading Backlog...</div>;
+  if (loading) return <div className="p-10 text-center">Loading Data...</div>;
 
   return (
     <div>
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+      <div className="mb-6 flex justify-between items-start">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Sprint Planning</h2>
-          <p className="text-slate-500 text-sm">Filter items for the next iteration.</p>
+          <p className="text-slate-500 text-sm">Define your capacity and build your sprint.</p>
         </div>
-        
-        <div className="flex gap-2 items-center bg-white p-3 rounded-lg shadow-sm border border-slate-200">
-          <span className="text-sm font-bold text-slate-600">Capacity (Hrs):</span>
-          <input 
-            type="number" 
-            value={capacity} 
-            onChange={(e) => setCapacity(Number(e.target.value))}
-            className="border p-1.5 rounded w-20 text-center font-mono bg-slate-50"
-          />
-          <button 
-            onClick={handleAutoPropose}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm font-medium transition"
-          >
-            Auto-Propose
-          </button>
-        </div>
+        <Link href="/" className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+          + Edit Product Backlog
+        </Link>
       </div>
 
-      {/* The Two Columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[600px]">
+      {/* SPRINT SETTINGS FORM */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-4 items-end">
+        <div className="flex-grow">
+          <label className="block text-sm font-bold text-slate-700 mb-1">Sprint Name</label>
+          <input type="text" placeholder="e.g., Sprint 1" value={sprintName} onChange={(e) => setSprintName(e.target.value)} className="border p-2 rounded w-full" />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-1">Duration (Wks)</label>
+          <input type="number" min="1" value={sprintDuration} onChange={(e) => setSprintDuration(Number(e.target.value))} className="border p-2 rounded w-24" />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-1">Capacity (Hrs)</label>
+          <input type="number" min="1" value={sprintCapacity} onChange={(e) => setSprintCapacity(Number(e.target.value))} className="border p-2 rounded w-28" />
+        </div>
+        <button onClick={handleAutoPropose} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-medium h-[42px]">
+          Auto-Propose Load
+        </button>
+      </div>
+
+      {/* DRAG & DROP COLUMNS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[500px]">
         
         {/* LEFT: Product Backlog */}
         <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 overflow-y-auto">
           <h3 className="font-bold text-slate-700 mb-4 sticky top-0 bg-slate-100 pb-2 border-b">
             Product Backlog ({backlog.length})
           </h3>
-          {backlog.length === 0 && <p className="text-sm text-slate-400 italic text-center mt-10">No items available.</p>}
-          
           {backlog.map(item => (
-            <div key={item.id} className="bg-white p-3 rounded-lg shadow-sm mb-2 flex justify-between items-center group hover:shadow-md transition">
+            <div key={item.id} className="bg-white p-3 rounded-lg shadow-sm mb-2 flex justify-between items-center group">
               <div>
                 <p className="font-medium text-slate-800">{item.description}</p>
                 <div className="flex gap-2 mt-1">
-                  <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                    item.priority === 'High' ? 'bg-red-100 text-red-700' :
-                    item.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-green-100 text-green-700'
-                  }`}>
-                    {item.priority}
-                  </span>
-                  <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded">{item.effort} hrs</span>
+                  <span className={`text-[10px] uppercase font-bold px-1 py-0.5 rounded ${item.priority === 'High' ? 'bg-red-100 text-red-700' : 'bg-slate-100'}`}>{item.priority}</span>
+                  <span className="text-xs text-slate-500 font-mono">{item.originalEffort}h</span>
                 </div>
               </div>
-              <button 
-                onClick={() => moveToSprint(item)}
-                className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition opacity-0 group-hover:opacity-100"
-                title="Move to Sprint"
-              >
+              <button onClick={() => moveToSprint(item)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-full opacity-0 group-hover:opacity-100">
                 <ArrowRight size={20} />
               </button>
             </div>
           ))}
         </div>
 
-        {/* RIGHT: Proposed Sprint */}
+        {/* RIGHT: Sprint Candidate */}
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 flex flex-col">
           <h3 className="font-bold text-blue-800 mb-4 sticky top-0 bg-blue-50 pb-2 border-b border-blue-200">
-            Sprint Candidate ({sprint.length})
+            Sprint Candidate
           </h3>
           
           <div className="flex-grow overflow-y-auto mb-4">
-            {sprint.length === 0 && <div className="h-full flex flex-col items-center justify-center text-blue-300 border-2 border-dashed border-blue-200 rounded-lg">
-              <p>Drag items here or use Auto-Propose</p>
-            </div>}
-
-            {sprint.map(item => (
+            {sprintItems.map(item => (
               <div key={item.id} className="bg-white p-3 rounded-lg shadow-sm mb-2 flex justify-between items-center border-l-4 border-blue-500 group">
-                <button 
-                  onClick={() => moveToBacklog(item)}
-                  className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition opacity-0 group-hover:opacity-100"
-                  title="Remove from Sprint"
-                >
+                <button onClick={() => moveToBacklog(item)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full opacity-0 group-hover:opacity-100">
                   <ArrowLeft size={20} />
                 </button>
-                <div className="text-right flex-grow">
+                <div className="text-right">
                   <p className="font-medium text-slate-800">{item.description}</p>
-                  <span className="text-xs font-mono text-slate-500">{item.effort} hrs</span>
+                  <span className="text-xs font-mono text-slate-500">{item.originalEffort}h</span>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Footer: Start Button */}
-          {sprint.length > 0 && (
-            <div className="pt-4 border-t border-blue-200">
-              <div className="flex justify-between items-center mb-3 text-sm font-bold text-blue-900">
-                <span>Total Load:</span>
-                <span>{sprint.reduce((acc, curr) => acc + curr.effort, 0)} hrs</span>
-              </div>
-              <button 
-                onClick={handleStartSprint}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-md flex justify-center items-center gap-2 transition transform hover:scale-[1.02]"
-              >
-                <Lock size={18} /> Confirm & Start Sprint
-              </button>
+          {/* SPRINT CAPACITY CHECK & BUTTON */}
+          <div className="pt-4 border-t border-blue-200 bg-white p-4 rounded-lg shadow-sm">
+            <div className="flex justify-between items-center mb-1 text-sm font-bold">
+              <span className="text-slate-600">Total Load:</span>
+              <span className={isOverCapacity ? "text-red-600" : "text-green-600"}>
+                {totalEffort} / {sprintCapacity} hrs
+              </span>
             </div>
-          )}
-        </div>
+            
+            {isOverCapacity && (
+              <div className="mb-4 mt-2 text-xs text-red-600 flex items-center gap-1 bg-red-50 p-2 rounded">
+                <AlertTriangle size={14} /> Warning: Capacity exceeded! Remove items.
+              </div>
+            )}
 
+            <button 
+              onClick={handleStartSprint}
+              disabled={isOverCapacity || !sprintName || sprintItems.length === 0}
+              className={`w-full py-3 mt-2 rounded-lg font-bold shadow-md flex justify-center items-center gap-2 transition ${
+                isOverCapacity || !sprintName || sprintItems.length === 0 
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              <Lock size={18} /> Activate Sprint
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
