@@ -12,7 +12,13 @@ export async function POST(request) {
       return NextResponse.json({ error: "Missing required sprint details" }, { status: 400 });
     }
 
-    // 2. Database Transaction: Create Sprint AND Update Items safely
+    // 2. Ensure no other sprint is currently active
+    const existingActive = await prisma.sprint.findFirst({ where: { status: 'active' } });
+    if (existingActive) {
+      return NextResponse.json({ error: "An active sprint already exists. End it before starting another." }, { status: 409 });
+    }
+
+    // 3. Database Transaction: Create Sprint AND Update Items safely
     const result = await prisma.$transaction(async (tx) => {
       // A. Create the Sprint record
       const newSprint = await tx.sprint.create({

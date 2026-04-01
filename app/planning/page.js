@@ -10,6 +10,7 @@ export default function SprintPlanning() {
   // Lists
   const [backlog, setBacklog] = useState([]);
   const [sprintItems, setSprintItems] = useState([]);
+  const [activeSprintExists, setActiveSprintExists] = useState(false);
   
   // Sprint Setup Data
   const [sprintName, setSprintName] = useState("");
@@ -20,6 +21,7 @@ export default function SprintPlanning() {
   // DYNAMIC CALCULATIONS (Matches your 'Capacity Limit' test cases)
   const totalEffort = sprintItems.reduce((acc, curr) => acc + curr.originalEffort, 0);
   const isOverCapacity = totalEffort > sprintCapacity;
+  const canActivateSprint = !isOverCapacity && sprintName && sprintItems.length > 0 && !activeSprintExists;
 
   // 1. Fetch available Backlog Items on load
   useEffect(() => {
@@ -31,6 +33,14 @@ export default function SprintPlanning() {
       setLoading(false);
     }
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    async function checkActiveSprint() {
+      const res = await fetch('/api/sprint/active');
+      setActiveSprintExists(res.ok);
+    }
+    checkActiveSprint();
   }, []);
 
   // 2. Auto-Propose Algorithm (Matches your 'generate_sprint_proposal' test case)
@@ -58,6 +68,7 @@ export default function SprintPlanning() {
 
   // 3. Start & Lock Sprint
   const handleStartSprint = async () => {
+    if (activeSprintExists) return alert("Cannot start a new sprint while another sprint is currently active.");
     if (isOverCapacity) return alert("Cannot start: Sprint capacity exceeded!");
     if (!sprintName) return alert("Please enter a Sprint Name.");
     if (sprintItems.length === 0) return alert("Sprint is empty.");
@@ -98,14 +109,23 @@ export default function SprintPlanning() {
 
   return (
     <div>
-      <div className="mb-6 flex justify-between items-start">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Sprint Planning</h2>
-          <p className="text-slate-500 text-sm">Define your capacity and build your sprint.</p>
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">Sprint Planning</h2>
+            <p className="text-slate-500 text-sm">Define your capacity and build your sprint.</p>
+          </div>
+          <Link href="/" className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+            + Edit Product Backlog
+          </Link>
         </div>
-        <Link href="/" className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-          + Edit Product Backlog
-        </Link>
+
+        {activeSprintExists && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 p-4 flex items-center gap-2">
+            <AlertTriangle size={18} />
+            <span>A sprint is currently active. You cannot activate another sprint until it is ended.</span>
+          </div>
+        )}
       </div>
 
       {/* SPRINT SETTINGS FORM */}
@@ -188,9 +208,9 @@ export default function SprintPlanning() {
 
             <button 
               onClick={handleStartSprint}
-              disabled={isOverCapacity || !sprintName || sprintItems.length === 0}
+              disabled={!canActivateSprint}
               className={`w-full py-3 mt-2 rounded-lg font-bold shadow-md flex justify-center items-center gap-2 transition ${
-                isOverCapacity || !sprintName || sprintItems.length === 0 
+                !canActivateSprint
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
                 : 'bg-green-600 hover:bg-green-700 text-white'
               }`}

@@ -1,6 +1,12 @@
+"use client";
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function Navbar() {
+  const pathname = usePathname();
+  if (pathname?.startsWith('/active')) return null;
+
   return (
     <nav className="bg-slate-900 text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
