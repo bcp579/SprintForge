@@ -28,6 +28,30 @@ export async function PUT(request, { params }) {
   }
 }
 
+export async function PATCH(request, { params }) {
+  try {
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
+    const body = await request.json();
+
+    if (!body.status) {
+      return NextResponse.json({ error: "Missing status." }, { status: 400 });
+    }
+
+    const updatedItem = await prisma.backlogItem.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: body.status,
+        remainingEffort: body.status === 'completed' ? 0 : undefined
+      }
+    });
+    return NextResponse.json(updatedItem);
+  } catch (error) {
+    console.error("PATCH Error:", error);
+    return NextResponse.json({ error: "Failed to update item" }, { status: 500 });
+  }
+}
+
 // DELETE: Remove an item
 export async function DELETE(request, { params }) {
   try {
