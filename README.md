@@ -8,6 +8,8 @@ Follow these steps to get the project running locally on your machine.
 
 ### 1. Environment Setup
 The project requires a local environment file to connect to the database. Copy the example file to create your own `.env`:
+```bash
+cp .env.example .env
 
 ### 2. Install Dependencies
 npm install
@@ -18,5 +20,4 @@ npm run setup
 ### 4. Start application
 npm run dev
 
-```bash
-cp .env.example .env
+
