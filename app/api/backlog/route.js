@@ -8,6 +8,12 @@ const prisma = new PrismaClient();
 export async function GET() {
   const items = await prisma.backlogItem.findMany({
     orderBy: { priority: 'asc' }, // Will sort alphabetically for now
+    include: {
+      tasks: true,
+      sprint: {
+        select: { name: true }
+      }
+    }
   });
   return NextResponse.json(items);
 }
@@ -40,5 +46,23 @@ export async function POST(request) {
     return NextResponse.json(newItem);
   } catch (error) {
     return NextResponse.json({ error: "Failed to create item" }, { status: 500 });
+  }
+}
+
+// PATCH: Mark a backlog item complete explicitly
+export async function PATCH(request) {
+  try {
+    const { backlogItemId, status } = await request.json();
+    const parsedId = parseInt(backlogItemId, 10);
+    const normalizedStatus = status === 'completed' ? 'completed' : 'product_backlog';
+
+    const updatedItem = await prisma.backlogItem.update({
+      where: { id: parsedId },
+      data: { status: normalizedStatus }
+    });
+
+    return NextResponse.json(updatedItem);
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to update backlog item" }, { status: 500 });
   }
 }

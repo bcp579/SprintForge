@@ -22,8 +22,7 @@ export default function ProductBacklog() {
     fetch('/api/backlog')
       .then(res => res.json())
       .then(data => {
-        // Only show items that haven't been locked into a sprint yet
-        setItems(data.filter(i => i.status === 'product_backlog'));
+        setItems(data);
       }); 
   }, []);
 
@@ -95,6 +94,14 @@ export default function ProductBacklog() {
     return passPriority && passEffort;
   });
 
+  const normalizedStatus = (status, remainingEffort, tasks = []) => {
+    const normalized = status?.toLowerCase?.();
+    if (normalized === 'completed') return 'completed';
+    if (tasks.length > 0 && tasks.every(task => task.status === 'done')) return 'completed';
+    if (normalized === 'sprint_locked' && remainingEffort === 0) return 'completed';
+    return 'pending';
+  };
+
   return (
     <div>
       {/* HEADER & FILTER BUTTON */}
@@ -161,6 +168,7 @@ export default function ProductBacklog() {
             <tr>
               <th className="p-4 w-1/2">Description</th>
               <th className="p-4">Priority</th>
+              <th className="p-4">Status</th>
               <th className="p-4">Risk</th>
               <th className="p-4">Effort</th>
               <th className="p-4 text-right">Actions</th>
@@ -168,7 +176,7 @@ export default function ProductBacklog() {
           </thead>
           <tbody>
             {filteredItems.length === 0 ? (
-              <tr><td colSpan="5" className="p-8 text-center text-slate-500">No items found.</td></tr>
+              <tr><td colSpan="6" className="p-8 text-center text-slate-500">No items found.</td></tr>
             ) : filteredItems.map((item) => (
               <tr key={item.id} className="border-t hover:bg-slate-50 transition group">
                 
@@ -176,6 +184,7 @@ export default function ProductBacklog() {
                 {editingId === item.id ? (
                   <>
                     <td className="p-3"><input className="border p-1 w-full rounded" value={editData.description} onChange={(e) => setEditData({...editData, description: e.target.value})} /></td>
+                    <td className="p-3 text-sm text-slate-500">{normalizedStatus(item.status, item.remainingEffort, item.tasks)}</td>
                     <td className="p-3"><select className="border p-1 rounded" value={editData.priority} onChange={(e) => setEditData({...editData, priority: e.target.value})}><option>High</option><option>Medium</option><option>Low</option></select></td>
                     <td className="p-3"><select className="border p-1 rounded" value={editData.risk} onChange={(e) => setEditData({...editData, risk: e.target.value})}><option value="High">High Risk</option><option value="Medium">Med Risk</option><option value="Low">Low Risk</option></select></td>
                     <td className="p-3"><input type="number" className="border p-1 w-16 rounded" value={editData.originalEffort} onChange={(e) => setEditData({...editData, originalEffort: e.target.value})} /></td>
@@ -187,10 +196,34 @@ export default function ProductBacklog() {
                 ) : (
                   /* NORMAL VIEW MODE */
                   <>
-                    <td className="p-4 font-medium">{item.description}</td>
+                    <td className="p-4 font-medium">
+                      {item.description}
+                      {item.status === 'completed' && item.sprint?.name ? (
+                        <span className="ml-2 text-xs text-slate-400">({item.sprint.name})</span>
+                      ) : null}
+                      {item.tasks?.length > 0 && (
+                        <div className="mt-2 space-y-1 text-sm text-slate-500">
+                          {item.tasks.map(task => (
+                            <div key={task.id} className="flex items-center justify-between gap-3">
+                              <span>{task.description}</span>
+                              {task.status === 'done' ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                                  done
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${item.priority === 'High' ? 'bg-red-100 text-red-700' : item.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                         {item.priority}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${normalizedStatus(item.status, item.remainingEffort, item.tasks) === 'completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {normalizedStatus(item.status, item.remainingEffort, item.tasks)}
                       </span>
                     </td>
                     <td className="p-4 text-sm text-slate-500">{item.risk || 'Low'}</td>

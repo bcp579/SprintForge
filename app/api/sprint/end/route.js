@@ -16,8 +16,8 @@ export async function POST(request) {
     if (!sprint) return NextResponse.json({ error: "Sprint not found" }, { status: 404 });
 
     // 2. Separate Completed vs Unfinished items
-    const completedItems = sprint.items.filter(item => item.remainingEffort === 0);
-    const unfinishedItems = sprint.items.filter(item => item.remainingEffort > 0);
+    const completedItems = sprint.items.filter(item => item.status === 'completed' || item.remainingEffort === 0);
+    const unfinishedItems = sprint.items.filter(item => item.status !== 'completed' && item.remainingEffort > 0);
 
     // 3. Calculate Velocity (Total original effort of perfectly completed items)
     const velocity = completedItems.reduce((sum, item) => sum + item.originalEffort, 0);
@@ -29,14 +29,25 @@ export async function POST(request) {
         const unfinishedIds = unfinishedItems.map(item => item.id);
         await tx.backlogItem.updateMany({
           where: { id: { in: unfinishedIds } },
-          data: { 
-            status: 'product_backlog', 
+          data: {
+            status: 'product_backlog',
             sprintId: null // Remove them from this sprint's lock
           }
         });
       }
 
-      // B. Mark Sprint as Completed (You could add a velocity field to your DB later to save this!)
+      // B. Mark completed items as completed and keep their sprint link for reporting
+      if (completedItems.length > 0) {
+        const completedIds = completedItems.map(item => item.id);
+        await tx.backlogItem.updateMany({
+          where: { id: { in: completedIds } },
+          data: {
+            status: 'completed'
+          }
+        });
+      }
+
+      // C. Mark Sprint as Completed (You could add a velocity field to your DB later to save this!)
       await tx.sprint.update({
         where: { id: parseInt(sprintId) },
         data: { status: 'completed' }
