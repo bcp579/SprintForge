@@ -235,10 +235,10 @@ export default function ActiveSprint() {
                 <span className="text-slate-400">Total Logged:</span>
                 <span className="font-mono font-bold text-green-400">{totalLogged} hrs</span>
               </div>
-              <div className="flex justify-between pb-2">
-                <span className="text-slate-400">Current Velocity:</span>
-                <span className="font-mono font-bold text-blue-400">{sprint.items.filter(i => i.remainingEffort === 0).reduce((sum, i) => sum + i.originalEffort, 0)} hrs</span>
-              </div>
+              // <div className="flex justify-between pb-2">
+              //   <span className="text-slate-400">Current Velocity:</span>
+              //   <span className="font-mono font-bold text-blue-400">{sprint.items.filter(i => i.remainingEffort === 0).reduce((sum, i) => sum + i.originalEffort, 0)} hrs</span>
+              // </div>
             </div>
             
           </div>
