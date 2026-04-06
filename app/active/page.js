@@ -12,11 +12,32 @@ export default function ActiveSprint() {
   
   const [newTaskInput, setNewTaskInput] = useState({});
   const [logHoursInput, setLogHoursInput] = useState({});
+  const [burndownData, setBurndownData] = useState([]);
 
   const fetchActiveSprint = async () => {
     const res = await fetch('/api/sprint/active');
     if (res.ok) {
-      setSprint(await res.json());
+      const data = await res.json();
+      setSprint(data)
+
+      const total = data.items.reduce((sum, item) => sum + item.originalEffort, 0);
+      const logged = data.items.reduce((sum, item) => sum + item.tasks.reduce((taskSum, task) => taskSum + task.loggedHours, 0), 0);
+      const remianing = Math.max(data.capacity - logged, 0);
+
+      const points = [{ entry: 'Start', actual: total, ideal: total }];
+      let runningRemaining = total;
+      const idealStep = total / Math.max(logged, 1);
+      data.items.forEach(item => {
+        item.tasks.forEach(task => {
+          if (task.loggedHours > 0) {
+            runningRemaining = Math.max(runningRemaining - task.loggedHours, 0);
+            const idealVal = Math.max(total - idealStep * points.length, 0);
+            points.push({ entry: `Log ${points.length}`, actual: runningRemaining, ideal: idealVal });
+          }
+        });
+      });
+
+      setBurndownData(points);
     } else {
       setSprint(null);
     }
@@ -73,6 +94,7 @@ export default function ActiveSprint() {
       return alert(error?.error || "Failed to complete item.");
     }
 
+    setNewTaskInput({ ...newTaskInput, [itemId]: "" });
     fetchActiveSprint();
   };
 
@@ -102,13 +124,6 @@ export default function ActiveSprint() {
   const totalOriginal = sprint.items.reduce((sum, item) => sum + item.originalEffort, 0);
   const totalLogged = sprint.items.reduce((sum, item) => sum + item.tasks.reduce((taskSum, task) => taskSum + task.loggedHours, 0), 0);
   const totalRemaining = Math.max(sprint.capacity - totalLogged, 0);
-  const totalActualWork = sprint.capacity;
-  
-  const burndownData = [
-    { day: 'Start', ideal: totalOriginal, actual: totalActualWork },
-    { day: 'Mid-Sprint', ideal: totalOriginal / 2, actual: (totalActualWork + totalRemaining) / 2 },
-    { day: 'Today', ideal: 0, actual: totalRemaining }
-  ];
 
   return (
     <div className="max-w-5xl mx-auto pb-20">
@@ -216,12 +231,12 @@ export default function ActiveSprint() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={burndownData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="day" stroke="#94a3b8" tick={{fontSize: 12}} />
+                  <XAxis dataKey="entry" stroke="#94a3b8" tick={{fontSize: 12}} /> {/* ← CHANGED: entry instead of day */}
                   <YAxis stroke="#94a3b8" tick={{fontSize: 12}} />
                   <Tooltip contentStyle={{backgroundColor: '#1e293b', border: 'none', borderRadius: '8px'}} />
                   <Legend wrapperStyle={{fontSize: '12px'}} />
-                  <Line type="monotone" dataKey="ideal" name="Ideal Trend" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                  <Line type="monotone" dataKey="actual" name="Remaining Hours" stroke="#3b82f6" strokeWidth={3} activeDot={{ r: 8 }} />
+                  <Line type="monotone" dataKey="ideal" name="Ideal Trend" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls /> {/* ← CHANGED: added connectNulls */}
+                  <Line type="monotone" dataKey="actual" name="Remaining Hours" stroke="#3b82f6" strokeWidth={3} activeDot={{ r: 8 }} connectNulls /> {/* ← CHANGED: added connectNulls */}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -235,10 +250,10 @@ export default function ActiveSprint() {
                 <span className="text-slate-400">Total Logged:</span>
                 <span className="font-mono font-bold text-green-400">{totalLogged} hrs</span>
               </div>
-               {/* <div className="flex justify-between pb-2">
-                 <span className="text-slate-400">Current Velocity:</span>
-                 <span className="font-mono font-bold text-blue-400">{sprint.items.filter(i => i.remainingEffort === 0).reduce((sum, i) => sum + i.originalEffort, 0)} hrs</span>
-              </div> */}
+              <div className="flex justify-between pb-2"> {/* ← CHANGED: uncommented and simplified */}
+                <span className="text-slate-400">Remaining:</span>
+                <span className="font-mono font-bold text-blue-400">{totalRemaining} hrs</span>
+              </div>
             </div>
             
           </div>
