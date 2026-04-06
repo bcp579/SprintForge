@@ -26,16 +26,18 @@ export default function ActiveSprint() {
 
       const points = [{ entry: 'Start', actual: total, ideal: total }];
       let runningRemaining = total;
-      const idealStep = total / Math.max(logged, 1);
+      const totalTasks = data.items.reduce((sum, item) => sum + item.tasks.filter(t => t.loggedHours > 0).length, 0);
+      const idealStep = total / Math.max(totalTasks, 1);
+
       data.items.forEach(item => {
-        item.tasks.forEach(task => {
-          if (task.loggedHours > 0) {
-            runningRemaining = Math.max(runningRemaining - task.loggedHours, 0);
-            const idealVal = Math.max(total - idealStep * points.length, 0);
-            points.push({ entry: `Log ${points.length}`, actual: runningRemaining, ideal: idealVal });
-          }
-        });
+      item.tasks.forEach(task => {
+      if (task.loggedHours > 0) {
+        runningRemaining = Math.max(runningRemaining - task.loggedHours, 0);
+        const idealVal = Math.max(total - idealStep * points.length, 0); // ← CHANGED: uses points.length BEFORE push so step aligns correctly
+        points.push({ entry: `Log ${points.length}`, actual: runningRemaining, ideal: idealVal });
+        }
       });
+    });
 
       setBurndownData(points);
     } else {
